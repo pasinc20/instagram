@@ -103,3 +103,23 @@ function image_uploader_page() {
   </div>
   <?php
 }
+
+function image_uploader_shortcode( $atts ) {
+  // Get the current user's image
+  $image_ids = get_user_meta( get_current_user_id(), 'image', true );
+  if ( empty( $image_ids ) ) {
+    return 'No images have been uploaded.';
+  }
+
+  // Display the images and their descriptions
+  $output = '';
+  foreach ( $image_ids as $image_id ) {
+    $image_url = wp_get_attachment_url( $image_id );
+    $image_description = get_post_field( 'post_content', $image_id );
+    $output .= '<img src="' . $image_url . '" style="max-width: 100%;">';
+    $output .= '<p>' . $image_description . '</p>';
+  }
+  return $output;
+}
+add_shortcode( 'image_uploader', 'image_uploader_shortcode' );
+
