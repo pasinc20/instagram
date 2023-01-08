@@ -37,6 +37,12 @@ function image_uploader_page() {
       if ( is_wp_error( $image ) ) {
         $errors[] = $image->get_error_message();
       } else {
+        // Set the description as the post_content of the attachment
+        wp_update_post( array(
+          'ID' => $image,
+          'post_content' => sanitize_text_field( $_POST['description'] ),
+        ) );
+
         $old_images = get_user_meta( get_current_user_id(), 'image', true );
         if ( !is_array( $old_images ) ) {
           $old_images = array();
@@ -46,7 +52,6 @@ function image_uploader_page() {
       }
     }
   }
-  
     // Display the form
   ?>
   <div class="wrap">
@@ -97,94 +102,4 @@ function image_uploader_page() {
     ?>
   </div>
   <?php
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  // Display the form
-  ?>
-  <div class="wrap">
-    <h1>Image Uploader</h1>
-    <?php if ( !empty( $errors ) ) : ?>
-      <div class="notice notice-error">
-        <ul>
-          <?php foreach ( $errors as $error ) : ?>
-            <li><?php echo $error; ?></li>
-          <?php endforeach; ?>
-        </ul>
-      </div>
-    <?php endif; ?>
-    <form method="post" enctype="multipart/form-data">
-      <p>
-        <label for="image">Choose an image:</label><br>
-        <input type="file" name="image" id="image">
-      </p>
-      <p>
-        <input type="submit" name="submit" value="Upload Image">
-      </p>
-    </form>
-
-    <?php
-    // Get the current user's image
-    $image_ids = get_user_meta( get_current_user_id(), 'image', true );
-    if ( !empty( $image_ids ) ) :
-      // Display the images and a delete button
-      $output = '';
-      foreach ( $image_ids as $image_id ) {
-        $image_url = wp_get_attachment_url( $image_id );
-        $output .= '<img src="' . $image_url . '" style="max-width: 100%;">';
-      }
-      echo $output;
-      ?>
-      <form method="post" action="<?php echo admin_url( 'options-general.php?page=image-uploader' ); ?>">
-        <input type="hidden" name="delete" value="<?php echo implode( ',', $image_ids ); ?>">
-        <input type="submit" name="submit" value="Delete Images">
-      </form>
-      <?php
-    endif;
-    ?>
-  </div>
-  <?php
 }
-// Check if the delete button has been clicked
-if ( isset( $_POST['delete'] ) ) {
-  // Delete the images
-  $image_ids = explode( ',', $_POST['delete'] );
-  foreach ( $image_ids as $image_id ) {
-    wp_delete_attachment( intval( $image_id ), true );
-    delete_user_meta( get_current_user_id(), 'image', $image_id );
-  }
-}
-
-function image_uploader_shortcode( $atts ) {
-  $atts = shortcode_atts( array(
-    'type' => '',
-  ), $atts, 'image_uploader' );
-
-  if ( $atts['type'] == 'form' ) {
-    $output = '<form method="post" enctype="multipart/form-data">';
-    $output .= '<p>';
-    $output .= '<label for="image">Choose an image:</label><br>';
-    $output .= '<input type="file" name="image" id="image">';
-    $output .= '</p>';
-    $output .= '</form>';
-  } elseif ( $atts['type'] == 'button' ) {
-    $output = '<input type="submit" name="submit" value="Upload Image">';
-  } else {
-    $output = '';
-  }
-
-  return $output;
-}
-add_shortcode( 'image_uploader', 'image_uploader_shortcode' );
