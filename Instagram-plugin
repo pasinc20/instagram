@@ -3,7 +3,7 @@
  * Plugin Name: Image Uploader
  * Plugin URI: https://example.com/image-uploader
  * Description: Allows logged in users to upload an image and display it on the front end.
- * Author: Your Name
+ * Author: Anykinks
  * Version: 1.0
  */
 
@@ -22,6 +22,22 @@ function image_uploader_page() {
   if ( !is_user_logged_in() || !current_user_can( 'upload_files' ) ) {
     wp_die( 'You do not have permission to access this page.' );
   }
+
+  // Check if the user has submitted the delete form
+  if ( isset( $_POST['delete_single'] ) && isset( $_POST['image_id'] ) ) {
+    // Delete the image
+    $image_id = intval( $_POST['image_id'] );
+    wp_delete_attachment( $image_id, true );
+
+    // Remove the image from the user's meta
+    $image_ids = get_user_meta( get_current_user_id(), 'image', true );
+    if ( ( $key = array_search( $image_id, $image_ids ) ) !== false ) {
+      unset( $image_ids[$key] );
+      update_user_meta( get_current_user_id(), 'image', $image_ids );
+    }
+  }
+
+
 
   // Check if the form has been submitted
   if ( isset( $_POST['submit'] ) ) {
@@ -51,9 +67,18 @@ function image_uploader_page() {
         update_user_meta( get_current_user_id(), 'image', $old_images );
       }
     }
+    
+    
+    
+    
+    
+    
+    
+    
   }
     // Display the form
   ?>
+  
   <div class="wrap">
     <h1>Image Uploader</h1>
     <?php if ( !empty( $errors ) ) : ?>
@@ -65,44 +90,75 @@ function image_uploader_page() {
         </ul>
       </div>
     <?php endif; ?>
+    
+    
     <form method="post" enctype="multipart/form-data">
+        
+        
       <p>
         <label for="image">Choose an image:</label><br>
         <input type="file" name="image" id="image">
       </p>
+      
+      
+      
       <p>
         <label for="description">Enter a description for the image:</label><br>
         <input type="text" name="description" id="description">
       </p>
+      
+      
+    
       <p>
         <input type="submit" name="submit" value="Upload Image">
       </p>
+      
+      
     </form>
+ 
+<div>
+  <?php
+  // Get the current user's images
+  $image_ids = get_user_meta( get_current_user_id(), 'image', true );
+  if ( !empty( $image_ids ) ) :
+    // Display the images
+    $output = '';
+    foreach ( $image_ids as $image_id ) {
+      $image_url = wp_get_attachment_url( $image_id );
+      $image_description = get_post_field( 'post_content', $image_id );
 
-    <?php
-    // Get the current user's image
-    $image_ids = get_user_meta( get_current_user_id(), 'image', true );
-    if ( !empty( $image_ids ) ) :
-      // Display the images and a delete button
-      $output = '';
-      foreach ( $image_ids as $image_id ) {
-        $image_url = wp_get_attachment_url( $image_id );
-        $image_description = get_post_field( 'post_content', $image_id );
-        $output .= '<img src="' . $image_url . '" style="max-width: 100%;">';
-        $output .= '<p>' . $image_description . '</p>';
-      }
-      echo $output;
-      ?>
-      <form method="post" action="<?php echo admin_url( 'options-general.php?page=image-uploader' ); ?>">
-        <input type="hidden" name="delete" value="<?php echo implode( ',', $image_ids ); ?>">
-        <input type="submit" name="submit" value="Delete Images">
-      </form>
-      <?php
-    endif;
-    ?>
-  </div>
+      // Add the image and a delete button
+      $output .= '<div class="image-wrapper">';
+      $output .= '<img src="' . $image_url . '" alt="' . $image_description . '">';
+      $output .= '<form method="post" class="delete-form">';
+      $output .= '<input type="hidden" name="image_id" value="' . $image_id . '">';
+      $output .= '<input type="submit" name="delete_single" value="Delete">';
+      $output .= '</form>';
+      $output .= '</div>';
+    }
+    echo $output;
+  endif;
+  ?>
+  
+  
+  
+  
+  
+  
+  
+
+</div>
+
+
+
   <?php
 }
+
+
+
+
+
+
 
 function image_uploader_shortcode( $atts ) {
   // Get the current user's image
@@ -112,14 +168,17 @@ function image_uploader_shortcode( $atts ) {
   }
 
   // Display the images and their descriptions
+
   $output = '';
+    
   foreach ( $image_ids as $image_id ) {
     $image_url = wp_get_attachment_url( $image_id );
     $image_description = get_post_field( 'post_content', $image_id );
+      $output .= '<p>' . $image_description . '</p>';
     $output .= '<img src="' . $image_url . '" style="max-width: 100%;">';
-    $output .= '<p>' . $image_description . '</p>';
+    
   }
+  
   return $output;
 }
 add_shortcode( 'image_uploader', 'image_uploader_shortcode' );
-
