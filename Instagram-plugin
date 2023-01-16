@@ -1,184 +1,145 @@
 <?php
-/*
- * Plugin Name: Image Uploader
- * Plugin URI: https://example.com/image-uploader
- * Description: Allows logged in users to upload an image and display it on the front end.
- * Author: Anykinks
+/**
+ * Plugin Name: User Text
+ * Description: A plugin that allows users to enter text and save it to their own database for display on the front end.
  * Version: 1.0
  */
 
-function image_uploader_activate() {
-  // Create database tables or options here
+function create_user_text_table() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'user_text';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE $table_name (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        user_id mediumint(9) NOT NULL,
+        text text NOT NULL,
+        timestamp datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+
+    require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+    dbDelta( $sql );
 }
-register_activation_hook( __FILE__, 'image_uploader_activate' );
 
-function image_uploader_menu() {
-  add_options_page( 'Image Uploader', 'Image Uploader', 'manage_options', 'image-uploader', 'image_uploader_page' );
+
+
+
+
+
+function image_uploader_display() {
+  global $wpdb;
+  $user_id = get_current_user_id();
+  $table_name = $wpdb->prefix . 'user_images';
+  
+  $images = $wpdb->get_results("SELECT image_id FROM $table_name WHERE user_id = $user_id");
+  
+  if (!empty($images)) {
+    echo '<ul>';
+    foreach ($images as $image) {
+      $attachment = get_post($image->image_id);
+      $attachment_url = wp_get_attachment_url($image->image_id);
+      $attachment_description = $attachment->post_content;
+      echo '<li>' . '<img src="' . $attachment_url . '"/><p>'.$attachment_description.'</p>' . '</li>';
+    }
+    echo '</ul>';
+  } else {
+    echo 'No images have been uploaded yet.';
+  }
 }
-add_action( 'admin_menu', 'image_uploader_menu' );
 
-function image_uploader_page() {
-  // Check if the user is logged in and has permission to upload images
-  if ( !is_user_logged_in() || !current_user_can( 'upload_files' ) ) {
-    wp_die( 'You do not have permission to access this page.' );
-  }
 
-  // Check if the user has submitted the delete form
-  if ( isset( $_POST['delete_single'] ) && isset( $_POST['image_id'] ) ) {
-    // Delete the image
-    $image_id = intval( $_POST['image_id'] );
-    wp_delete_attachment( $image_id, true );
+register_activation_hook( __FILE__, 'create_user_text_table' );
 
-    // Remove the image from the user's meta
-    $image_ids = get_user_meta( get_current_user_id(), 'image', true );
-    if ( ( $key = array_search( $image_id, $image_ids ) ) !== false ) {
-      unset( $image_ids[$key] );
-      update_user_meta( get_current_user_id(), 'image', $image_ids );
+function show_user_text_form() {
+    echo '<form method="post" action="">';
+    echo '<label for="user_text">Enter your text:</label>';
+    echo '<input type="text" id="user_text" name="user_text" />';
+    echo '<input type="submit" value="Save" />';
+    echo '</form>';
+}
+
+function save_user_text() {
+        if ( isset( $_POST['user_text'] ) ) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'user_text';
+        $user_id = get_current_user_id();
+        $text = sanitize_text_field( $_POST['user_text'] );
+        $timestamp = current_time( 'mysql' );
+
+        $wpdb->insert(
+            $table_name,
+            array(
+                'user_id' => $user_id,
+                'text' => $text,
+                'timestamp' => $timestamp,
+            )
+        );
     }
-  }
+}
+add_action( 'init', 'save_user_text' );
 
+function delete_user_text_table() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'user_text';
+    $wpdb->query( "DROP TABLE IF EXISTS $table_name" );
+}
+register_deactivation_hook( __FILE__, 'delete_user_text_table' );
+register_uninstall_hook( __FILE__, 'delete_user_text_table' );
 
-
-  // Check if the form has been submitted
-  if ( isset( $_POST['submit'] ) ) {
-    // Validate the form data
-    $errors = array();
-    if ( !isset( $_FILES['image'] ) || empty( $_FILES['image']['tmp_name'] ) ) {
-      $errors[] = 'Please select an image to upload.';
+function update_user_text_table() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'user_text';
+    $installed_version = get_option( 'user_text_plugin_version' );
+    if ( $installed_version !== '1.0' ) {
+        // Perform update tasks
+        update_option( 'user_text_plugin_version', '1.0' );
     }
+}
+register_activation_hook( __FILE__, 'update_user_text_table' );
 
-    // If there are no errors, handle the image upload
-    if ( empty( $errors ) ) {
-      $image = media_handle_upload( 'image', 0 );
-      if ( is_wp_error( $image ) ) {
-        $errors[] = $image->get_error_message();
-      } else {
-        // Set the description as the post_content of the attachment
-        wp_update_post( array(
-          'ID' => $image,
-          'post_content' => sanitize_text_field( $_POST['description'] ),
-        ) );
+function load_user_text_plugin_textdomain() {
+    load_plugin_textdomain( 'user-text', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+}
+add_action( 'plugins_loaded', 'load_user_text_plugin_textdomain' );
 
-        $old_images = get_user_meta( get_current_user_id(), 'image', true );
-        if ( !is_array( $old_images ) ) {
-          $old_images = array();
+function display_user_text() {
+    if ( is_user_logged_in() ) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'user_text';
+        $user_id = get_current_user_id();
+        $user_text = $wpdb->get_var( $wpdb->prepare( "SELECT text FROM $table_name WHERE user_id = %d", $user_id ) );
+        echo $user_text;
+    }
+}
+add_shortcode( 'user_text', 'display_user_text' );
+
+function image_uploader_profile_shortcode() {
+    // Get the username of the current user's profile
+    $user_name = get_query_var('author_name');
+    // Get the user object by username
+    $user = get_user_by('login', $user_name);
+    // Get the user's ID
+    $user_id = $user->ID;
+    // Get the user's images
+    $images = get_user_meta( $user_id, 'image', true );
+    // Check if the user has images
+    if ( !empty( $images ) ) {
+        $output = '<div class="image-uploader-profile-images">';
+        foreach ( $images as $image_id ) {
+            $image_url = wp_get_attachment_url( $image_id );
+            $image_description = get_post($image_id)->post_content;
+            $output .= '<div class="image-uploader-profile-image">';
+            $output .= '<img src="' . $image_url . '" alt="">';
+            $output .= '<p>' . $image_description . '</p>';
+            $output .= '</div>';
         }
-        array_push( $old_images, $image );
-        update_user_meta( get_current_user_id(), 'image', $old_images );
-      }
+        $output .= '</div>';
+    } else {
+        $output = '<p>No images have been uploaded.</p>';
     }
-    
-    
-    
-    
-    
-    
-    
-    
-  }
-    // Display the form
-  ?>
-  
-  <div class="wrap">
-    <h1>Image Uploader</h1>
-    <?php if ( !empty( $errors ) ) : ?>
-      <div class="notice notice-error">
-        <ul>
-          <?php foreach ( $errors as $error ) : ?>
-            <li><?php echo $error; ?></li>
-          <?php endforeach; ?>
-        </ul>
-      </div>
-    <?php endif; ?>
-    
-    
-    <form method="post" enctype="multipart/form-data">
-        
-        
-      <p>
-        <label for="image">Choose an image:</label><br>
-        <input type="file" name="image" id="image">
-      </p>
-      
-      
-      
-      <p>
-        <label for="description">Enter a description for the image:</label><br>
-        <input type="text" name="description" id="description">
-      </p>
-      
-      
-    
-      <p>
-        <input type="submit" name="submit" value="Upload Image">
-      </p>
-      
-      
-    </form>
- 
-<div>
-  <?php
-  // Get the current user's images
-  $image_ids = get_user_meta( get_current_user_id(), 'image', true );
-  if ( !empty( $image_ids ) ) :
-    // Display the images
-    $output = '';
-    foreach ( $image_ids as $image_id ) {
-      $image_url = wp_get_attachment_url( $image_id );
-      $image_description = get_post_field( 'post_content', $image_id );
-
-      // Add the image and a delete button
-      $output .= '<div class="image-wrapper">';
-      $output .= '<img src="' . $image_url . '" alt="' . $image_description . '">';
-      $output .= '<form method="post" class="delete-form">';
-      $output .= '<input type="hidden" name="image_id" value="' . $image_id . '">';
-      $output .= '<input type="submit" name="delete_single" value="Delete">';
-      $output .= '</form>';
-      $output .= '</div>';
-    }
-    echo $output;
-  endif;
-  ?>
-  
-  
-  
-  
-  
-  
-  
-
-</div>
-
-
-
-  <?php
+    return $output;
 }
+add_shortcode( 'image_uploader_profile', 'image_uploader_profile_shortcode' );
 
 
-
-
-
-
-
-function image_uploader_shortcode( $atts ) {
-  // Get the current user's image
-  $image_ids = get_user_meta( get_current_user_id(), 'image', true );
-  if ( empty( $image_ids ) ) {
-    return 'No images have been uploaded.';
-  }
-
-  // Display the images and their descriptions
-
-  $output = '';
-    
-  foreach ( $image_ids as $image_id ) {
-    $image_url = wp_get_attachment_url( $image_id );
-    $image_description = get_post_field( 'post_content', $image_id );
-      $output .= '<p>' . $image_description . '</p>';
-    $output .= '<img src="' . $image_url . '" style="max-width: 100%;">';
-    
-  }
-  
-  return $output;
-}
-add_shortcode( 'image_uploader', 'image_uploader_shortcode' );
